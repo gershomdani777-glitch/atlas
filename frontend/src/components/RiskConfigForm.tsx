@@ -17,6 +17,7 @@ const FIELDS: { key: keyof RiskConfig; label: string; step: number }[] = [
 export function RiskConfigForm() {
   const [config, setConfig] = useState<RiskConfig | null>(null);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     api.getRiskConfig().then(setConfig).catch(() => {});
@@ -27,10 +28,15 @@ export function RiskConfigForm() {
   async function save() {
     if (!config) return;
     setSaved(false);
-    const updated = await api.putRiskConfig(config);
-    setConfig(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(false);
+    try {
+      const updated = await api.putRiskConfig(config);
+      setConfig(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError(true);
+    }
   }
 
   return (
@@ -63,6 +69,7 @@ export function RiskConfigForm() {
             {saved ? "Saved" : "Save constraints"}
           </button>
         </ClickSpark>
+        {error && <p style={{ color: "var(--color-charcoal)", fontSize: 13, marginTop: 8 }}>Couldn&apos;t save — check the backend is reachable.</p>}
       </div>
     </div>
   );

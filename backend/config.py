@@ -10,9 +10,9 @@ class Settings(BaseSettings):
 
     # LLM (Google Gemini free tier)
     google_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
-    gemini_embedding_model: str = "models/text-embedding-004"
-    llm_timeout_seconds: float = 8.0
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_embedding_model: str = "models/gemini-embedding-001"
+    llm_timeout_seconds: float = 20.0
 
     # Market data ingestion
     binance_ws_base: str = "wss://stream.binance.com:9443"

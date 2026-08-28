@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from agent.runner import run_cycle
@@ -15,6 +16,7 @@ from config import settings
 from db import repository
 from db.session import get_session
 from ingestion.binance_ws import run_ingestion_loop
+from ingestion.redis_keys import CHANNEL_STATUS, get_redis_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("atlas.main")
@@ -71,10 +73,21 @@ def get_status():
         }
 
 
+def _broadcast_status(running: bool) -> None:
+    # Already-connected browsers only get a full snapshot once, at connect
+    # time — without this, the kill switch would flip the DB but nobody
+    # watching would see it change until they reloaded the page.
+    try:
+        get_redis_client().publish(CHANNEL_STATUS, json.dumps({"type": "status", "running": running}))
+    except Exception as exc:
+        logger.warning("Failed to publish status change to Redis: %s", exc)
+
+
 @app.post("/agent/kill")
 def kill_agent():
     with get_session() as session:
         repository.set_running(session, False)
+    _broadcast_status(False)
     return {"status": "killed"}
 
 
@@ -82,11 +95,12 @@ def kill_agent():
 def resume_agent():
     with get_session() as session:
         repository.set_running(session, True)
+    _broadcast_status(True)
     return {"status": "resumed"}
 
 
 @app.get("/agent/decisions")
-def get_decisions(limit: int = 30, offset: int = 0, accepted: bool | None = None):
+def get_decisions(limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0), accepted: bool | None = None):
     with get_session() as session:
         rows = repository.list_decisions(session, limit=limit, offset=offset, accepted=accepted)
         symbol_by_id = {a.id: a.symbol for a in repository.get_active_assets(session)}

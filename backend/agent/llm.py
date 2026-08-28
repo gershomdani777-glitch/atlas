@@ -94,8 +94,12 @@ def get_thesis_candidates(state: AgentState) -> tuple[list[ThesisCandidate], boo
         result = future.result(timeout=settings.llm_timeout_seconds)
         candidates = result.candidates if isinstance(result, ThesisCandidateList) else []
         known_assets = set(state["assets"].keys())
-        candidates = [c for c in candidates if c.asset.lower() in known_assets]
-        return candidates, False
+        normalized = []
+        for c in candidates:
+            if c.asset.lower() in known_assets:
+                c.asset = c.asset.lower()  # Gemini often echoes the symbol back uppercased
+                normalized.append(c)
+        return normalized, False
     except FutureTimeoutError:
         logger.warning("Gemini interpret() call timed out after %ss; no new theses this cycle.", settings.llm_timeout_seconds)
         return [], True

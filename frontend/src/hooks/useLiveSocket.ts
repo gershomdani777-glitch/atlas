@@ -52,6 +52,8 @@ function reducer(state: LiveState, action: Action): LiveState {
       return { ...state, prices: { ...state.prices, [message.symbol]: message.price } };
     case "regime":
       return { ...state, regimes: { ...state.regimes, [message.asset]: message.new_regime } };
+    case "status":
+      return { ...state, running: message.running };
     case "decision":
       return { ...state, recentDecisions: [message.decision, ...state.recentDecisions].slice(0, 50) };
     default:

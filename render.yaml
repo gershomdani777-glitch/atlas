@@ -15,11 +15,11 @@ services:
       - key: GOOGLE_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-1.5-flash
+        value: gemini-3.1-flash-lite
       - key: GEMINI_EMBEDDING_MODEL
-        value: models/text-embedding-004
+        value: models/gemini-embedding-001
       - key: LLM_TIMEOUT_SECONDS
-        value: "8"
+        value: "20"
       - key: BINANCE_WS_BASE
         value: wss://stream.binance.com:9443
       - key: ASSET_UNIVERSE

@@ -18,7 +18,7 @@ from websockets.exceptions import ConnectionClosed
 
 from config import settings
 
-from .redis_keys import CHANNEL_TICKS, depth_key, get_redis_client, price_key
+from .redis_keys import CHANNEL_TICKS, depth_key, get_async_redis_client, price_key
 
 logger = logging.getLogger("atlas.ingestion.binance")
 
@@ -37,7 +37,7 @@ def _stream_url() -> str:
     return f"{settings.binance_ws_base}/stream?streams=" + "/".join(streams)
 
 
-def _handle_ticker(redis_client, payload: dict) -> None:
+async def _handle_ticker(redis_client, payload: dict) -> None:
     symbol = payload["s"].lower()
     price = float(payload["c"])
     fact = {
@@ -46,11 +46,11 @@ def _handle_ticker(redis_client, payload: dict) -> None:
         "observed_at": _now_iso(),
         "ttl_seconds": settings.staleness_ttl_seconds,
     }
-    redis_client.set(price_key(symbol), json.dumps(fact), ex=30)
-    redis_client.publish(CHANNEL_TICKS, json.dumps({"type": "tick", "symbol": symbol.upper(), "price": price}))
+    await redis_client.set(price_key(symbol), json.dumps(fact), ex=30)
+    await redis_client.publish(CHANNEL_TICKS, json.dumps({"type": "tick", "symbol": symbol.upper(), "price": price}))
 
 
-def _handle_depth(redis_client, symbol: str, payload: dict) -> None:
+async def _handle_depth(redis_client, symbol: str, payload: dict) -> None:
     bids = payload.get("bids", [])
     asks = payload.get("asks", [])
     if not bids or not asks:
@@ -70,7 +70,7 @@ def _handle_depth(redis_client, symbol: str, payload: dict) -> None:
         "observed_at": _now_iso(),
         "ttl_seconds": settings.staleness_ttl_seconds,
     }
-    redis_client.set(depth_key(symbol), json.dumps(fact), ex=30)
+    await redis_client.set(depth_key(symbol), json.dumps(fact), ex=30)
 
 
 async def _consume(redis_client) -> None:
@@ -85,16 +85,16 @@ async def _consume(redis_client) -> None:
                 symbol = stream.split("@")[0]
 
                 if "@ticker" in stream:
-                    _handle_ticker(redis_client, data)
+                    await _handle_ticker(redis_client, data)
                 elif "@depth" in stream:
-                    _handle_depth(redis_client, symbol, data)
+                    await _handle_depth(redis_client, symbol, data)
             except Exception as exc:  # keep the connection alive on a single bad message
                 logger.warning("Failed to process Binance message: %s", exc)
 
 
 async def run_ingestion_loop() -> None:
     """Outer reconnect loop with exponential backoff. Runs forever."""
-    redis_client = get_redis_client()
+    redis_client = get_async_redis_client()
     backoff = 1
 
     while True:

@@ -97,4 +97,5 @@ export type LiveMessage =
   | { type: "snapshot"; running: boolean; cycle: number; capital: number; equity: number; peak_equity: number; positions: Position[]; recent_decisions: Decision[] }
   | { type: "tick"; symbol: string; price: number }
   | { type: "regime"; asset: string; previous_regime: Regime; new_regime: Regime; cycle: number }
+  | { type: "status"; running: boolean }
   | { type: "decision"; decision: Decision };

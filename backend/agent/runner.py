@@ -163,11 +163,20 @@ def persist_state(session, state: AgentState) -> tuple[list[dict], list[dict]]:
 
 
 def run_cycle() -> None:
+    # Hydrate and persist each get their own short-lived session — the graph
+    # invocation in between (which can block for seconds on a slow/retrying
+    # Gemini call) must never hold a DB connection open. Against Supabase's
+    # transaction-mode pooler in particular, an idle-but-checked-out
+    # connection during unrelated network I/O starves other requests trying
+    # to acquire a connection from the same pool.
     with get_session() as session:
         state = hydrate_state(session)
-        if state is None:
-            return
-        result_state = atlas_app.invoke(state)
+    if state is None:
+        return
+
+    result_state = atlas_app.invoke(state)
+
+    with get_session() as session:
         decision_events, regime_events = persist_state(session, result_state)
 
     # Best-effort side effects, only after the transaction above committed cleanly.

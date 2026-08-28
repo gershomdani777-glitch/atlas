@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-EMBEDDING_DIM = 768  # matches Gemini's text-embedding-004
+EMBEDDING_DIM = 3072  # matches Gemini's gemini-embedding-001
 
 # JSONB on Postgres (indexable, binary), plain JSON elsewhere (e.g. the
 # SQLite engine used by test_graph_integration.py).

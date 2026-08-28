@@ -13,7 +13,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from config import settings
 from db.session import get_session
 from db import repository
-from ingestion.redis_keys import CHANNEL_DECISIONS, CHANNEL_REGIME, CHANNEL_TICKS
+from ingestion.redis_keys import CHANNEL_DECISIONS, CHANNEL_REGIME, CHANNEL_STATUS, CHANNEL_TICKS
 
 logger = logging.getLogger("atlas.ws")
 
@@ -22,8 +22,7 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.active: set[WebSocket] = set()
 
-    async def connect(self, websocket: WebSocket) -> None:
-        await websocket.accept()
+    def register(self, websocket: WebSocket) -> None:
         self.active.add(websocket)
 
     def disconnect(self, websocket: WebSocket) -> None:
@@ -83,7 +82,7 @@ async def redis_fanout_task() -> None:
         try:
             client = aioredis.from_url(settings.redis_url, decode_responses=True)
             pubsub = client.pubsub()
-            await pubsub.subscribe(CHANNEL_TICKS, CHANNEL_REGIME, CHANNEL_DECISIONS)
+            await pubsub.subscribe(CHANNEL_TICKS, CHANNEL_REGIME, CHANNEL_DECISIONS, CHANNEL_STATUS)
             logger.info("Subscribed to Redis pubsub channels for /ws/live fanout")
             async for message in pubsub.listen():
                 if message.get("type") != "message":
@@ -98,9 +97,15 @@ async def redis_fanout_task() -> None:
 
 
 async def ws_live_endpoint(websocket: WebSocket) -> None:
-    await manager.connect(websocket)
+    await websocket.accept()
+    # Fetch + send the snapshot BEFORE registering for broadcast — otherwise a
+    # live tick can be fanned out to this socket while the snapshot's DB read
+    # is still in flight, so the client's first frame isn't guaranteed to be
+    # the snapshot it needs to render non-empty state.
+    snapshot = await build_snapshot_payload()
+    await websocket.send_text(json.dumps(snapshot))
+    manager.register(websocket)
     try:
-        await websocket.send_text(json.dumps(await build_snapshot_payload()))
         while True:
             # Clients don't need to send anything; this just detects disconnects.
             await websocket.receive_text()
