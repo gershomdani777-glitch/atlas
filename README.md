@@ -57,6 +57,23 @@ Covers the regime classifier, the risk/allocation engine's constraint checks, an
 - Frontend → Vercel, with **Root Directory** set to `frontend` in the project settings, and
   `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` pointed at the deployed backend.
 
+## Staying inside free-tier limits
+
+Several defaults exist specifically to avoid burning through Gemini's free daily quota or Upstash's free command
+budget — these aren't arbitrary:
+
+- **`AGENT_CYCLE_SECONDS=30`** — matches the build doc's stated 30–60s cadence. Every cycle costs one Gemini
+  chat call and one batched embedding call; a shorter cadence multiplies that directly. Don't drop this much
+  below 30s on a free-tier key.
+- **Embedding calls are batched** — `interpret()` retrieves memory context for every active asset in a single
+  embedding API call per cycle, not one call per asset.
+- **`REDIS_WRITE_INTERVAL_SECONDS=4.0`** — Binance's depth stream alone fires 10x/second/symbol; ingestion only
+  writes to Redis at most once per this interval per (symbol, fact type), since `perceive()` only reads once per
+  cycle anyway. Kept comfortably under `STALENESS_TTL_SECONDS=10` so the throttle itself never causes false-stale
+  reads.
+- If you still see quota errors, check which Gemini model your key is quota'd against — free-tier daily limits
+  are per-model, so switching `GEMINI_MODEL` to a different model gives it its own separate quota bucket.
+
 ## Core design
 
 The LLM (Gemini) only ever *proposes* a structured thesis — it never sizes or executes. A deterministic risk engine

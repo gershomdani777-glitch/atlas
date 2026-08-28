@@ -5,12 +5,20 @@ and @depth20@100ms (top-of-book depth) for the configured asset universe,
 and writes last-value-wins snapshots into Redis with an observed_at
 timestamp + TTL, so perceive() can distinguish current vs. stale facts.
 
+Binance's @depth20@100ms stream alone fires 10x/second per symbol — the
+agent only ever reads this data once per AGENT_CYCLE_SECONDS (default 30s),
+so writing to Redis on every single message would burn a free-tier Upstash
+command budget for no benefit. Writes are throttled per (symbol, fact type)
+to REDIS_WRITE_INTERVAL_SECONDS, comfortably inside STALENESS_TTL_SECONDS
+so perceive() never sees stale data because of the throttle itself.
+
 No API key or account needed — this is Binance's public market-data feed.
 """
 
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 import websockets
@@ -23,6 +31,16 @@ from .redis_keys import CHANNEL_TICKS, depth_key, get_async_redis_client, price_
 logger = logging.getLogger("atlas.ingestion.binance")
 
 MAX_BACKOFF_SECONDS = 30
+
+_last_write: dict[str, float] = {}
+
+
+def _should_write(key: str) -> bool:
+    now = time.monotonic()
+    if now - _last_write.get(key, 0.0) < settings.redis_write_interval_seconds:
+        return False
+    _last_write[key] = now
+    return True
 
 
 def _now_iso() -> str:
@@ -39,6 +57,8 @@ def _stream_url() -> str:
 
 async def _handle_ticker(redis_client, payload: dict) -> None:
     symbol = payload["s"].lower()
+    if not _should_write(f"price:{symbol}"):
+        return
     price = float(payload["c"])
     fact = {
         "symbol": symbol,
@@ -51,6 +71,8 @@ async def _handle_ticker(redis_client, payload: dict) -> None:
 
 
 async def _handle_depth(redis_client, symbol: str, payload: dict) -> None:
+    if not _should_write(f"depth:{symbol}"):
+        return
     bids = payload.get("bids", [])
     asks = payload.get("asks", [])
     if not bids or not asks:

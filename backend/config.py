@@ -18,10 +18,16 @@ class Settings(BaseSettings):
     binance_ws_base: str = "wss://stream.binance.com:9443"
     asset_universe: str = "btcusdt,ethusdt,solusdt,bnbusdt,xrpusdt,dogeusdt"
     depth_stream_levels: int = 20
-    staleness_ttl_seconds: int = 5
+    staleness_ttl_seconds: int = 10
+    # Binance's depth stream alone fires 10x/second/symbol; the agent only
+    # reads Redis once per agent_cycle_seconds, so writes are throttled to
+    # this interval to avoid burning a free-tier Upstash command budget for
+    # updates nothing will read. Must stay comfortably under
+    # staleness_ttl_seconds or perceive() would see false-stale data.
+    redis_write_interval_seconds: float = 4.0
 
     # Agent loop
-    agent_cycle_seconds: int = 10
+    agent_cycle_seconds: int = 30
     memory_top_k: int = 3
 
     # Default risk config (seeded into risk_config table on first init)

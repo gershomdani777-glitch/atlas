@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agent.state import ClosedOutcome, DecisionReceipt, Position, RegimeChange, ThrottleUpdate
+from agent.state import ClosedOutcome, DecisionReceipt, Position, ThrottleUpdate
 from db.models import (
     AgentRuntime,
     Asset,

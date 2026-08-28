@@ -78,12 +78,14 @@ def get_thesis_candidates(state: AgentState) -> tuple[list[ThesisCandidate], boo
         state["memory_context"] = {}
         return [], True
 
-    memory_by_asset: dict[str, list[dict]] = {}
-    for symbol, asset in state["assets"].items():
-        if asset.stale:
-            continue
-        query = f"{symbol} regime={asset.regime} trend={asset.trend:.2f} volatility={asset.volatility:.4f}"
-        memory_by_asset[symbol] = memory.retrieve_similar(symbol, query)
+    queries = {
+        symbol: f"{symbol} regime={asset.regime} trend={asset.trend:.2f} volatility={asset.volatility:.4f}"
+        for symbol, asset in state["assets"].items()
+        if not asset.stale
+    }
+    # One batched embedding call for every active asset this cycle, not one
+    # call per asset — the free-tier daily quota doesn't forgive N-per-cycle.
+    memory_by_asset = memory.retrieve_similar_batch(queries)
     state["memory_context"] = memory_by_asset
 
     prompt = _build_prompt(state, memory_by_asset)

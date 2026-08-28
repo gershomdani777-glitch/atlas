@@ -5,7 +5,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
+# Conservative pool sizing against Supabase's transaction-mode pooler
+# (Supavisor, port 6543), which caps backend connections per project far
+# below SQLAlchemy's own defaults (pool_size=5 + max_overflow=10 = 15).
+# pool_recycle keeps connections from going stale past the pooler's own
+# idle-connection timeout, which otherwise surfaces as a hard-to-diagnose
+# "server closed the connection unexpectedly" on reuse.
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    pool_size=3,
+    max_overflow=2,
+    pool_recycle=280,
+    future=True,
+)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 

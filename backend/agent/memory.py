@@ -3,7 +3,12 @@ from __future__ import annotations
 """Outcome-conditioned memory: embed thesis+outcome text into pgvector and
 retrieve the top-k most similar past situations for a given asset before
 the next Interpret call. Every call is best-effort — a failure here must
-never break the agent cycle, only degrade it to "no memory context"."""
+never break the agent cycle, only degrade it to "no memory context".
+
+Retrieval is batched across all assets into a single Gemini embedding call
+per cycle (`retrieve_similar_batch`) rather than one call per asset — on a
+free-tier daily quota, N separate network calls where one batched call
+would do is pure waste."""
 
 import logging
 
@@ -41,25 +46,40 @@ def embed_text(text: str) -> list[float] | None:
         return None
 
 
-def retrieve_similar(asset_symbol: str, query_text: str, k: int | None = None) -> list[dict]:
-    """Top-k similar (thesis, outcome) pairs for `asset_symbol`. Returns []
-    on any failure (no API key, embedding error, no rows yet) rather than
-    raising, so interpret() can always proceed with an empty memory context."""
-    k = k or settings.memory_top_k
-    embedding = embed_text(query_text)
-    if embedding is None:
-        return []
+def retrieve_similar_batch(queries: dict[str, str], k: int | None = None) -> dict[str, list[dict]]:
+    """queries: {asset_symbol: query_text}. Returns {asset_symbol: [{thesis_text,
+    outcome_summary}, ...]}. One embedding API call for every asset in
+    `queries`, not one call each — the whole point of this function over
+    calling `embed_text` in a loop."""
+    if not queries:
+        return {}
 
+    k = k or settings.memory_top_k
+    client = _get_embeddings_client()
+    if client is None:
+        return {}
+
+    symbols = list(queries.keys())
+    try:
+        embeddings = client.embed_documents(list(queries.values()))
+    except Exception as exc:
+        logger.warning("Batched embedding call failed for %d assets: %s", len(symbols), exc)
+        return {}
+
+    results: dict[str, list[dict]] = {}
     try:
         with get_session() as session:
-            asset = repository.get_asset_by_symbol(session, asset_symbol)
-            if asset is None:
-                return []
-            rows = repository.query_similar_memories(session, asset.id, embedding, k)
-            return [{"thesis_text": r.thesis_text, "outcome_summary": r.outcome_summary} for r in rows]
+            for symbol, embedding in zip(symbols, embeddings):
+                asset = repository.get_asset_by_symbol(session, symbol)
+                if asset is None:
+                    continue
+                rows = repository.query_similar_memories(session, asset.id, embedding, k)
+                results[symbol] = [{"thesis_text": r.thesis_text, "outcome_summary": r.outcome_summary} for r in rows]
     except Exception as exc:
-        logger.warning("Memory retrieval failed for %s: %s", asset_symbol, exc)
-        return []
+        logger.warning("Memory retrieval failed after embedding: %s", exc)
+        return {}
+
+    return results
 
 
 def embed_and_store(record: dict) -> None:
