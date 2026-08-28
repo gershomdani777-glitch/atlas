@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     agent_cycle_seconds: int = 30
     memory_top_k: int = 3
 
+    # Regime classification thresholds (Section 5.1 of the build doc: "the
+    # thresholds themselves are configuration, not hardcoded strategy logic").
+    # Calibrated against what the real ingestion pipeline actually produces
+    # (log-return stdev over a rolling multi-minute window, a [0,1] trend
+    # score) — not arbitrary round numbers picked before any real data flowed.
+    regime_high_volatility_threshold: float = 0.0015
+    regime_illiquid_liquidity_threshold: float = 0.5
+    regime_trending_threshold: float = 0.58
+    regime_mean_reverting_threshold: float = 0.42
+
     # Default risk config (seeded into risk_config table on first init)
     default_max_position_pct: float = 0.12
     default_max_exposure_pct: float = 0.45

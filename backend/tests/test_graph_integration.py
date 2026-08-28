@@ -84,6 +84,13 @@ def build_fake_state(cycle: int = 1):
             "max_exposure_pct": 0.45,
             "drawdown_stop_pct": 0.08,
             "min_edge_over_cost_bps": 8.0,
+            # Round-number thresholds matching this fixture's round-number
+            # volatility/trend values — independent of config.py's real-data
+            # calibrated defaults.
+            "regime_high_volatility_threshold": 0.05,
+            "regime_illiquid_liquidity_threshold": 0.5,
+            "regime_trending_threshold": 0.7,
+            "regime_mean_reverting_threshold": 0.3,
         },
         "candidates": [],
         "llm_degraded": False,

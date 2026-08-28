@@ -39,6 +39,14 @@ services:
         value: "30"
       - key: MEMORY_TOP_K
         value: "3"
+      - key: REGIME_HIGH_VOLATILITY_THRESHOLD
+        value: "0.0015"
+      - key: REGIME_ILLIQUID_LIQUIDITY_THRESHOLD
+        value: "0.5"
+      - key: REGIME_TRENDING_THRESHOLD
+        value: "0.58"
+      - key: REGIME_MEAN_REVERTING_THRESHOLD
+        value: "0.42"
       - key: DEFAULT_MAX_POSITION_PCT
         value: "0.12"
       - key: DEFAULT_MAX_EXPOSURE_PCT

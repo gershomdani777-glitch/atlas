@@ -94,6 +94,10 @@ def perceive(state: AgentState) -> AgentState:
         asset.stale = False
         if fresh_price:
             asset.price = fresh_price["price"]
+            # Older cached facts (written before this field existed) won't
+            # have these — fall back to the existing value rather than KeyError.
+            asset.volatility = fresh_price.get("volatility", asset.volatility)
+            asset.trend = fresh_price.get("trend", asset.trend)
         if fresh_depth:
             asset.depth = fresh_depth["depth_usd"]
             asset.liquidity = fresh_depth["liquidity_score"]
@@ -126,18 +130,24 @@ def interpret(state: AgentState) -> AgentState:
 
 
 def classify_regime(state: AgentState) -> AgentState:
+    config = state["config"]
+    high_vol_threshold = config.get("regime_high_volatility_threshold", 0.0015)
+    illiquid_threshold = config.get("regime_illiquid_liquidity_threshold", 0.5)
+    trending_threshold = config.get("regime_trending_threshold", 0.62)
+    mean_reverting_threshold = config.get("regime_mean_reverting_threshold", 0.38)
+
     changes = []
     for symbol, asset in state["assets"].items():
         previous = asset.regime
         if asset.stale:
             regime = "illiquid"
-        elif asset.volatility > 0.05:
+        elif asset.volatility > high_vol_threshold:
             regime = "high_volatility"
-        elif asset.liquidity < 0.5:
+        elif asset.liquidity < illiquid_threshold:
             regime = "illiquid"
-        elif asset.trend > 0.7:
+        elif asset.trend > trending_threshold:
             regime = "trending"
-        elif asset.trend < 0.3:
+        elif asset.trend < mean_reverting_threshold:
             regime = "mean_reverting"
         else:
             regime = "normal"

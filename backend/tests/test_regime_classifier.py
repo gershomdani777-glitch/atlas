@@ -9,6 +9,15 @@ def _state_with(asset: AssetMarketState):
         "cycle": 1,
         "assets": {asset.symbol: asset},
         "regime_changes": [],
+        # Explicit round-number thresholds for this test's own boundary
+        # cases — independent of whatever the production defaults in
+        # config.py happen to be calibrated to.
+        "config": {
+            "regime_high_volatility_threshold": 0.05,
+            "regime_illiquid_liquidity_threshold": 0.5,
+            "regime_trending_threshold": 0.7,
+            "regime_mean_reverting_threshold": 0.3,
+        },
     }
 
 

@@ -53,6 +53,10 @@ def hydrate_state(session) -> AgentState | None:
 
     config = repository.get_risk_config(session)
     config["staleness_ttl_seconds"] = settings.staleness_ttl_seconds
+    config["regime_high_volatility_threshold"] = settings.regime_high_volatility_threshold
+    config["regime_illiquid_liquidity_threshold"] = settings.regime_illiquid_liquidity_threshold
+    config["regime_trending_threshold"] = settings.regime_trending_threshold
+    config["regime_mean_reverting_threshold"] = settings.regime_mean_reverting_threshold
 
     positions: list[Position] = []
     for outcome in repository.get_open_outcomes(session):
