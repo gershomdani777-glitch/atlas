@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-anthropic
+pydantic
+sqlalchemy
+redis
+python-dotenv

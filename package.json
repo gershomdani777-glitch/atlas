@@ -1,0 +1,9 @@
+{
+  "name": "atlas-ai-paper-trader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ATLAS autonomous paper-trading decision loop demo",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
