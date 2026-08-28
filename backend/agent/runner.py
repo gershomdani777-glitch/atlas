@@ -146,10 +146,17 @@ def persist_state(session, state: AgentState) -> tuple[list[dict], list[dict]]:
     symbol_by_asset_id = {i: s for s, i in asset_id_by_symbol.items()}
     decision_events = [
         {
+            # Must match the /agent/decisions REST shape exactly — the
+            # frontend renders WS-delivered and REST-fetched decisions
+            # through the same component with no distinction, so a partial
+            # payload here crashes the UI the instant a live decision arrives.
             "id": row.id,
             "cycle": row.cycle,
             "asset": symbol_by_asset_id.get(row.asset_id, "").upper(),
             "direction": row.direction,
+            "thesis": row.thesis,
+            "expected_edge_bps": row.expected_edge_bps,
+            "confidence": row.confidence,
             "accepted": row.accepted,
             "size": row.size,
             "reason": row.reason,

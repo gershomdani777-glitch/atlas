@@ -59,10 +59,17 @@ async def build_snapshot_payload() -> dict:
                 "peak_equity": runtime.peak_equity,
                 "positions": positions,
                 "recent_decisions": [
+                    # Must match the /agent/decisions REST shape exactly —
+                    # this feeds the same DecisionRow component as the REST
+                    # fetch, with no distinction made between the two.
                     {
                         "id": d.id,
+                        "cycle": d.cycle,
                         "asset": symbol_by_id.get(d.asset_id, "").upper(),
                         "direction": d.direction,
+                        "thesis": d.thesis,
+                        "expected_edge_bps": d.expected_edge_bps,
+                        "confidence": d.confidence,
                         "accepted": d.accepted,
                         "size": d.size,
                         "reason": d.reason,

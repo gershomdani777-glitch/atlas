@@ -4,6 +4,7 @@ import "./globals.css";
 import { AtlasProvider } from "@/context/AtlasProvider";
 import { TopNav } from "@/components/TopNav";
 import { PageTransition } from "@/components/PageTransition";
+import TargetCursor from "@/components/reactbits/TargetCursor";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -26,6 +27,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${fraunces.variable} ${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <AtlasProvider>
+          <TargetCursor
+            targetSelector=".cursor-target, .btn-filled, .btn-ghost, .nav-pill, .gooey-nav-container li"
+            spinDuration={3}
+            cursorColor="#ffffff"
+            cursorColorOnTarget="#c8f169"
+          />
           <TopNav />
           <main style={{ flex: 1, maxWidth: 1200, margin: "0 auto", width: "100%" }}>
             <PageTransition>{children}</PageTransition>

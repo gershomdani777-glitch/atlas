@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import type { MarketAsset } from "@/lib/types";
 import { useAtlas } from "@/context/AtlasProvider";
 import { useCountUp } from "@/hooks/useCountUp";
-import { RegimeBadge } from "@/components/RegimeBadge";
+import { MarketCard } from "@/components/MarketCard";
 import { PositionsTable } from "@/components/PositionsTable";
 import { PixelTrailBackground } from "@/components/reactbits/PixelTrailBackground";
 import SplitFlapText from "@/components/reactbits/SplitFlapText";
@@ -112,36 +112,20 @@ export default function LiveOpsPage() {
         </div>
       </section>
 
-      <section style={{ padding: "56px 0 80px", display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24 }}>
-        <div className="card-paper">
-          <span className="eyebrow-label">Live Ops</span>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Price</th>
-                <th>Regime</th>
-                <th>Liquidity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mergedMarket.map((asset) => (
-                <tr key={asset.symbol} style={{ opacity: asset.stale ? 0.4 : 1 }}>
-                  <td>{asset.symbol.toUpperCase()}</td>
-                  <td>{money(asset.price)}</td>
-                  <td><RegimeBadge regime={asset.regime} /></td>
-                  <td>{asset.liquidity.toFixed(2)}</td>
-                </tr>
-              ))}
-              {mergedMarket.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ opacity: 0.5 }}>Waiting for market data…</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <section style={{ padding: "56px 0 0" }}>
+        <span className="eyebrow-label">Market Overview</span>
+        <p className="body-copy" style={{ marginBottom: 20, opacity: 0.8 }}>
+          Hover a market to reveal its live volatility, liquidity, depth, and trend.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+          {mergedMarket.map((asset) => (
+            <MarketCard key={asset.symbol} asset={asset} />
+          ))}
+          {mergedMarket.length === 0 && <p style={{ opacity: 0.5 }}>Waiting for market data…</p>}
         </div>
+      </section>
 
+      <section style={{ padding: "56px 0 80px" }}>
         <div className="card-paper">
           <span className="eyebrow-label">Positions</span>
           <PositionsTable positions={live.positions} />
