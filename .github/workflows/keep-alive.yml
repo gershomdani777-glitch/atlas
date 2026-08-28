@@ -1,0 +1,17 @@
+name: Keep Render backend awake
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /agent/status
+        run: |
+          if [ -z "${{ secrets.RENDER_BACKEND_URL }}" ]; then
+            echo "RENDER_BACKEND_URL secret not set; skipping ping." && exit 0
+          fi
+          curl -sf "${{ secrets.RENDER_BACKEND_URL }}/agent/status" || echo "Ping failed (backend may be cold-starting)."

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/venv/
+backend/.venv/
+.pytest_cache/
+*.rdb
+
+# Env files
+.env
+.env.local
+*.env
+!*.env.example
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+*.tsbuildinfo
+npm-debug.log*
+
+# OS
+.DS_Store

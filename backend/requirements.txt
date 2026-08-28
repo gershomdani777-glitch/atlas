@@ -1,8 +1,13 @@
 fastapi
 uvicorn[standard]
 langgraph
-langchain-anthropic
+langchain-google-genai
 pydantic
+pydantic-settings
 sqlalchemy
+pgvector
+psycopg2-binary
 redis
+websockets
 python-dotenv
+pytest

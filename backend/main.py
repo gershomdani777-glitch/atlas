@@ -1,118 +1,136 @@
+from __future__ import annotations
+
 import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import time
-from agent.graph import atlas_app
-from agent.state import AssetMarketState
 
-app = FastAPI()
+from agent.runner import run_cycle
+from api.routes_config import router as config_router
+from api.routes_receipts import router as receipts_router
+from api.ws import redis_fanout_task, ws_live_endpoint
+from config import settings
+from db import repository
+from db.session import get_session
+from ingestion.binance_ws import run_ingestion_loop
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("atlas.main")
+
+_background_tasks: list[asyncio.Task] = []
+
+
+async def agent_loop() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(run_cycle)
+        except Exception as exc:
+            logger.exception("Agent cycle failed: %s", exc)
+        await asyncio.sleep(settings.agent_cycle_seconds)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _background_tasks.append(asyncio.create_task(run_ingestion_loop()))
+    _background_tasks.append(asyncio.create_task(agent_loop()))
+    _background_tasks.append(asyncio.create_task(redis_fanout_task()))
+    yield
+    for task in _background_tasks:
+        task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initial mock state
-ASSETS = [
-    {"symbol": "BTC-USD", "price": 104820.0, "volatility": 0.010, "depth": 920000.0},
-    {"symbol": "ETH-USD", "price": 3825.0, "volatility": 0.014, "depth": 510000.0},
-    {"symbol": "SOL-USD", "price": 184.2, "volatility": 0.024, "depth": 180000.0},
-]
+app.include_router(config_router)
+app.include_router(receipts_router)
 
-global_state = {
-    "cycle": 0,
-    "assets": {
-        a["symbol"]: AssetMarketState(
-            symbol=a["symbol"],
-            price=a["price"],
-            volatility=a["volatility"],
-            depth=a["depth"],
-            liquidity=1.0,
-            trend=0.5,
-            regime="normal",
-            updated_at=""
-        ) for a in ASSETS
-    },
-    "capital": 100000.0,
-    "equity": 100000.0,
-    "peak_equity": 100000.0,
-    "throttle": {
-        a["symbol"]: {"normal": 1.0, "trending": 1.0, "mean_reverting": 1.0, "high_volatility": 0.5, "illiquid": 0.2}
-        for a in ASSETS
-    },
-    "config": {
-        "max_position_pct": 0.12,
-        "max_exposure_pct": 0.45,
-        "max_asset_exposure_pct": 0.20,
-        "drawdown_stop_pct": 0.08,
-        "min_edge_over_cost_bps": 8.0,
-        "kelly_fraction": 0.25
-    },
-    "candidates": [],
-    "decisions": [],
-    "positions": [],
-    "history": []
-}
 
-is_running = True
+@app.websocket("/ws/live")
+async def ws_live(websocket: WebSocket):
+    await ws_live_endpoint(websocket)
 
-async def agent_loop():
-    global global_state
-    while True:
-        if is_running:
-            try:
-                # We invoke the graph with the current state.
-                # In LangGraph, we can pass the state dict directly.
-                global_state = atlas_app.invoke(global_state)
-            except Exception as e:
-                print(f"Error in agent cycle: {e}")
-        await asyncio.sleep(10) # 10 seconds cadence for demo
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(agent_loop())
 
 @app.get("/agent/status")
 def get_status():
-    return {"running": is_running, "cycle": global_state["cycle"]}
+    with get_session() as session:
+        runtime = repository.get_runtime(session)
+        return {
+            "running": runtime.is_running,
+            "cycle": runtime.cycle,
+            "cadence_seconds": settings.agent_cycle_seconds,
+        }
+
 
 @app.post("/agent/kill")
 def kill_agent():
-    global is_running
-    is_running = False
+    with get_session() as session:
+        repository.set_running(session, False)
     return {"status": "killed"}
+
 
 @app.post("/agent/resume")
 def resume_agent():
-    global is_running
-    is_running = True
+    with get_session() as session:
+        repository.set_running(session, True)
     return {"status": "resumed"}
 
+
 @app.get("/agent/decisions")
-def get_decisions(limit: int = 30):
-    return [d.dict() for d in global_state["decisions"][:limit]]
+def get_decisions(limit: int = 30, offset: int = 0, accepted: bool | None = None):
+    with get_session() as session:
+        rows = repository.list_decisions(session, limit=limit, offset=offset, accepted=accepted)
+        symbol_by_id = {a.id: a.symbol for a in repository.get_active_assets(session)}
+        return [
+            {
+                "id": d.id,
+                "cycle": d.cycle,
+                "asset": symbol_by_id.get(d.asset_id, "").upper(),
+                "direction": d.direction,
+                "thesis": d.thesis,
+                "expected_edge_bps": d.expected_edge_bps,
+                "confidence": d.confidence,
+                "regime": d.regime,
+                "accepted": d.accepted,
+                "size": d.size,
+                "reason": d.reason,
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in rows
+        ]
+
 
 @app.get("/portfolio")
 def get_portfolio():
-    exposure = sum(p.size * p.entry_price for p in global_state["positions"])
-    return {
-        "capital": global_state["capital"],
-        "equity": global_state["equity"],
-        "exposure": exposure,
-        "positions": [p.dict() for p in global_state["positions"]]
-    }
+    with get_session() as session:
+        runtime = repository.get_runtime(session)
+        positions = repository.get_portfolio_open_positions(session)
+        exposure = sum(p["size"] * p["entry_price"] for p in positions)
+        return {
+            "capital": runtime.capital,
+            "equity": runtime.equity,
+            "peak_equity": runtime.peak_equity,
+            "exposure": exposure,
+            "positions": positions,
+        }
+
 
 @app.get("/market")
 def get_market():
-    return {s: a.dict() for s, a in global_state["assets"].items()}
+    with get_session() as session:
+        return repository.get_market_snapshot(session)
+
 
 @app.get("/metrics")
 def get_metrics():
-    return {
-        "history": global_state["history"],
-        "throttle": global_state["throttle"]
-    }
+    with get_session() as session:
+        return repository.get_metrics(session)
