@@ -61,5 +61,7 @@ services:
         value: "8.0"
       - key: STARTING_CAPITAL
         value: "100000.0"
+      # Set in the Render dashboard once you have a real Vercel URL, e.g.
+      # https://your-app.vercel.app — comma-separated for multiple origins.
       - key: CORS_ORIGINS
         sync: false

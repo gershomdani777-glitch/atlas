@@ -51,11 +51,31 @@ Covers the regime classifier, the risk/allocation engine's constraint checks, an
 
 ## Deployment
 
-- Backend → Render (`render.yaml` at repo root), free tier. A GitHub Actions workflow
+**Vercel cannot run the backend.** It's a serverless platform — every function has a hard execution time limit and
+gets torn down between requests. ATLAS's backend needs a continuous 30s agent loop, a persistent Binance WebSocket
+connection, and a persistent `/ws/live` server, none of which survive inside a serverless function. Vercel Cron's
+closest equivalent tops out at per-minute (Pro) or once/day (Hobby) — nowhere near a live loop. Split hosting is
+required:
+
+- **Backend → Render** (`render.yaml` at repo root), free tier. A GitHub Actions workflow
   (`.github/workflows/keep-alive.yml`) pings it every 10 minutes to reduce cold starts — add a
   `RENDER_BACKEND_URL` repo secret pointing at your deployed backend's base URL to enable it.
-- Frontend → Vercel, with **Root Directory** set to `frontend` in the project settings, and
-  `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` pointed at the deployed backend.
+- **Frontend → Vercel**, with **Root Directory** set to `frontend` in the project settings.
+
+### Vercel env vars — set these *before* the first build, not after
+
+`NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` are inlined into the JavaScript bundle **at build time**, not read
+at runtime — this is standard Next.js behavior for any `NEXT_PUBLIC_*` variable used in client code. If you deploy
+before setting them, the site builds and loads *without error*, but silently keeps calling `localhost:8000`
+forever. Set them in Vercel's project settings first, or trigger a redeploy afterward if you set them late:
+
+```
+NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+NEXT_PUBLIC_WS_URL=wss://your-backend.onrender.com/ws/live
+```
+
+Note **`wss://`**, not `ws://` — Render serves HTTPS, so the WebSocket upgrade must be secure too, or the browser
+will refuse the connection.
 
 ## Staying inside free-tier limits
 
